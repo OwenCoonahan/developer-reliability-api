@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Developer Reliability Score</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/style.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-mono/style.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#09090b;--card:#0a0a0a;--border:#27272a;--text:#fafafa;--muted:#a1a1aa;--accent:#3b82f6;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--orange:#f97316;--radius:8px;--font:'Geist',sans-serif;--mono:'Geist Mono',monospace}
+[data-theme="light"]{--bg:#ffffff;--card:#ffffff;--border:#e5e5e5;--text:#09090b;--muted:#737373}
+html{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+body{min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}
+button{font-family:var(--font);cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);padding:6px 14px;border-radius:var(--radius);font-size:13px;transition:all .15s}
+button:hover{border-color:var(--muted)}
+select,input[type="text"],input[type="number"],input[type="range"]{font-family:var(--font);background:var(--card);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:var(--radius);font-size:13px;outline:none;transition:border-color .15s}
+select:focus,input:focus{border-color:var(--muted)}
+select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:28px}
+
+/* Header */
+.header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.header-left{display:flex;flex-direction:column;gap:2px}
+.header-left h1{font-size:20px;font-weight:600;letter-spacing:-0.3px}
+.header-left .subtitle{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.header-right{display:flex;align-items:center;gap:8px}
+.theme-toggle{width:34px;height:34px;display:flex;align-items:center;justify-content:center;padding:0;font-size:16px;border-radius:50%}
+
+/* Filters */
+.filters{padding:12px 24px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filters label{font-size:12px;color:var(--muted);margin-right:2px}
+.filter-group{display:flex;align-items:center;gap:4px}
+.search-input{width:220px}
+.score-range{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.score-range input[type="range"]{width:80px;accent-color:var(--accent)}
+
+/* Layout */
+.main{flex:1;display:flex;overflow:hidden;position:relative}
+.table-wrap{flex:1;overflow:auto;padding:0}
+.detail-panel{width:520px;border-left:1px solid var(--border);overflow-y:auto;background:var(--bg);transform:translateX(100%);transition:transform .25s ease;position:absolute;right:0;top:0;bottom:0;z-index:10}
+.detail-panel.open{transform:translateX(0)}
+@media(min-width:1200px){.detail-panel{position:relative;transform:translateX(0);display:none}.detail-panel.open{display:block}}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead{position:sticky;top:0;z-index:5;background:var(--bg)}
+th{text-align:left;padding:10px 12px;font-weight:500;color:var(--muted);font-size:12px;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none}
+th:hover{color:var(--text)}
+th .sort-arrow{margin-left:4px;font-size:10px}
+td{padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+tr.data-row{cursor:pointer;transition:background .1s}
+tr.data-row:nth-child(even){background:rgba(255,255,255,.015)}
+[data-theme="light"] tr.data-row:nth-child(even){background:rgba(0,0,0,.02)}
+tr.data-row:hover{background:rgba(255,255,255,.04)}
+[data-theme="light"] tr.data-row:hover{background:rgba(0,0,0,.04)}
+tr.data-row.selected{background:rgba(59,130,246,.08)}
+.rank-cell{color:var(--muted);font-family:var(--mono);font-size:12px;width:40px}
+.dev-name{font-weight:500}
+.score-cell{display:flex;align-items:center;gap:8px}
+.score-bar{width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.score-val{font-family:var(--mono);font-size:12px;font-weight:600;min-width:28px}
+.rate-good{color:var(--green)}.rate-mid{color:var(--yellow)}.rate-bad{color:var(--red)}
+.mw-cell{font-family:var(--mono);font-size:12px}
+.tag{display:inline-block;padding:1px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;margin:1px;color:var(--muted)}
+.regions-cell,.fuels-cell{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.no-results{padding:40px;text-align:center;color:var(--muted)}
+
+/* Detail Panel */
+.detail-header{padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+.detail-close{width:30px;height:30px;display:flex;align-items:center;justify-content:center;padding:0;font-size:18px;border:none;background:none;color:var(--muted);border-radius:50%}
+.detail-close:hover{background:var(--border);color:var(--text)}
+.dev-title{font-size:18px;font-weight:600}
+.dev-since{font-size:12px;color:var(--muted);margin-top:2px}
+.score-badge{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;font-family:var(--mono);font-size:20px;font-weight:700;border:2px solid}
+.detail-section{padding:16px 20px;border-bottom:1px solid var(--border)}
+.detail-section h3{font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);font-size:11px}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.stat-card{padding:10px;border:1px solid var(--border);border-radius:var(--radius);text-align:center}
+.stat-val{font-family:var(--mono);font-size:16px;font-weight:600}
+.stat-label{font-size:11px;color:var(--muted);margin-top:2px}
+.benchmark-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px}
+.benchmark-row .bm-label{color:var(--muted)}
+.benchmark-row .bm-val{font-family:var(--mono);font-size:12px}
+.bm-better{color:var(--green)}.bm-worse{color:var(--red)}.bm-neutral{color:var(--muted)}
+.chart-container{height:220px;position:relative}
+.chart-container-sm{height:160px;position:relative}
+.projects-table{width:100%;font-size:12px;border-collapse:collapse}
+.projects-table th{font-size:11px;padding:6px 8px;color:var(--muted);border-bottom:1px solid var(--border)}
+.projects-table td{padding:5px 8px;border-bottom:1px solid var(--border)}
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px}
+.status-operational{background:var(--green)}.status-active{background:var(--accent)}.status-withdrawn{background:var(--red)}.status-suspended{background:var(--orange)}.status-under_construction{background:var(--yellow)}
+
+/* Footer */
+.footer{padding:12px 24px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:24px;font-size:12px;color:var(--muted)}
+.footer-stat{display:flex;align-items:center;gap:6px}
+.footer-stat .fval{font-family:var(--mono);color:var(--text);font-weight:500}
+
+/* Loading */
+.loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--muted);font-size:14px}
+
+@media(max-width:768px){
+  .filters{padding:8px 12px}.header{padding:12px 16px}
+  .search-input{width:100%}
+  .detail-panel{width:100%}
+  td,th{padding:6px 8px;font-size:12px}
+  .stats-grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Developer Reliability Score</h1>
+    <div class="subtitle">Track Records & Benchmarks</div>
+  </div>
+  <div class="header-right">
+    <a href="https://github.com/owencoonahan/developer-reliability-api" target="_blank"><button>API Docs</button></a>
+    <button onclick="exportCSV()">↓ Export CSV</button>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">◐</button>
+  </div>
+</div>
+
+<div class="filters">
+  <div class="filter-group">
+    <input type="text" class="search-input" id="search" placeholder="Search developer..." oninput="debouncedRender()">
+  </div>
+  <div class="filter-group">
+    <label>Region</label>
+    <select id="fRegion" onchange="render()"><option value="">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Type</label>
+    <select id="fType" onchange="render()"><option value="">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Min Projects</label>
+    <select id="fMinProj" onchange="render()">
+      <option value="0">Any</option><option value="3">3+</option><option value="5" selected>5+</option><option value="10">10+</option><option value="20">20+</option><option value="50">50+</option>
+    </select>
+  </div>
+  <div class="filter-group score-range">
+    <label>Score ≥</label>
+    <input type="range" id="fMinScore" min="0" max="70" value="0" oninput="this.nextElementSibling.textContent=this.value;render()">
+    <span>0</span>
+  </div>
+  <div class="filter-group">
+    <label>Sort</label>
+    <select id="fSort" onchange="render()">
+      <option value="score">Score</option><option value="total_capacity_mw">Total MW</option><option value="total_projects">Projects</option><option value="completion_rate">Completion Rate</option><option value="avg_timeline_days">Avg Timeline</option>
+    </select>
+  </div>
+</div>
+
+<div class="main">
+  <div class="table-wrap" id="tableWrap">
+    <div class="loading" id="loading">Loading data...</div>
+    <table id="mainTable" style="display:none">
+      <thead><tr>
+        <th class="rank-cell">#</th>
+        <th>Developer</th>
+        <th>Score</th>
+        <th>Total MW</th>
+        <th>Projects</th>
+        <th>Completion</th>
+        <th>Withdrawal</th>
+        <th>Avg Timeline</th>
+        <th>Regions</th>
+        <th>Fuel Types</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="no-results" id="noResults" style="display:none">No developers match your filters.</div>
+  </div>
+  <div class="detail-panel" id="detailPanel">
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<div class="footer">
+  <div class="footer-stat">Developers scored: <span class="fval" id="fDevs">—</span></div>
+  <div class="footer-stat">Projects analyzed: <span class="fval" id="fProj">—</span></div>
+  <div class="footer-stat">Total capacity: <span class="fval" id="fGW">—</span></div>
+  <div class="footer-stat">Updated: <span class="fval" id="fDate">—</span></div>
+</div>
+
+<script>
+let DATA=null,PROJECTS=null,STATS=null,MARKET=null,REGION_BM=null;
+let filtered=[], selectedDev=null, charts={};
+const $=id=>document.getElementById(id);
+
+// Score color
+function scoreColor(s){
+  if(s>=55)return'var(--green)';if(s>=40)return'var(--yellow)';if(s>=25)return'var(--orange)';return'var(--red)';
+}
+function rateClass(r){return r>=0.5?'rate-good':r>=0.25?'rate-mid':'rate-bad'}
+function fmt(n,d=0){if(n==null)return'—';return n.toLocaleString(undefined,{maximumFractionDigits:d})}
+function pct(n){if(n==null)return'—';return(n*100).toFixed(1)+'%'}
+
+// Theme
+function toggleTheme(){
+  const t=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=t;
+  localStorage.setItem('theme',t);
+  Object.values(charts).forEach(c=>{if(c&&!c._destroyed){try{c.destroy()}catch(e){}}});
+  charts={};
+  if(selectedDev)showDetail(selectedDev);
+}
+(function(){const t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t})();
+
+// Debounce
+let debounceTimer;
+function debouncedRender(){clearTimeout(debounceTimer);debounceTimer=setTimeout(render,200)}
+
+// Load data
+fetch('data.json').then(r=>r.json()).then(d=>{
+  DATA=d.developers;PROJECTS=d.projects;STATS=d.stats;MARKET=d.market_averages;REGION_BM=d.region_benchmarks;
+  // Populate filter dropdowns
+  const regions=new Set(),types=new Set();
+  DATA.forEach(d=>{
+    (d.regions||'').split(', ').forEach(r=>{if(r)regions.add(r)});
+    (d.fuel_types||'').split(', ').forEach(t=>{if(t)types.add(t)});
+  });
+  const rSel=$('fRegion'),tSel=$('fType');
+  [...regions].sort().forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;rSel.appendChild(o)});
+  [...types].sort().forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;tSel.appendChild(o)});
+  // Footer
+  $('fDevs').textContent=fmt(STATS.total_developers);
+  $('fProj').textContent=fmt(STATS.total_projects);
+  $('fGW').textContent=fmt(STATS.total_capacity_gw,1)+' GW';
+  $('fDate').textContent=STATS.last_updated;
+  $('loading').style.display='none';
+  $('mainTable').style.display='';
+  render();
+  // Hash deep link
+  if(location.hash){
+    const m=location.hash.match(/developer=(.+)/);
+    if(m){const name=decodeURIComponent(m[1]);const d=DATA.find(x=>x.name===name);if(d)showDetail(d)}
+  }
+}).catch(e=>{$('loading').textContent='Error loading data: '+e.message});
+
+function render(){
+  const q=$('search').value.toLowerCase();
+  const region=$('fRegion').value;
+  const type=$('fType').value;
+  const minProj=+$('fMinProj').value;
+  const minScore=+$('fMinScore').value;
+  const sort=$('fSort').value;
+
+  filtered=DATA.filter(d=>{
+    if(q&&!d.name.toLowerCase().includes(q))return false;
+    if(region&&!(d.regions||'').includes(region))return false;
+    if(type&&!(d.fuel_types||'').includes(type))return false;
+    if(d.total_projects<minProj)return false;
+    if((d.score||0)<minScore)return false;
+    return true;
+  });
+
+  filtered.sort((a,b)=>{
+    const av=a[sort],bv=b[sort];
+    if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;
+    if(sort==='avg_timeline_days')return av-bv;
+    return bv-av;
+  });
+
+  const tbody=$('tbody');
+  if(!filtered.length){tbody.innerHTML='';$('noResults').style.display='';return}
+  $('noResults').style.display='none';
+
+  // Virtual render — show first 200
+  const show=filtered.slice(0,200);
+  tbody.innerHTML=show.map((d,i)=>{
+    const s=d.score||0;
+    const wr=d.total_projects>0?(d.withdrawn/d.total_projects):null;
+    const timeline=d.avg_timeline_days!=null?(d.avg_timeline_days/30).toFixed(1)+'mo':'—';
+    const regions=(d.regions||'').split(', ').slice(0,3).map(r=>`<span class="tag">${r}</span>`).join('');
+    const fuels=(d.fuel_types||'').split(', ').slice(0,3).map(f=>`<span class="tag">${f}</span>`).join('');
+    const sel=selectedDev&&selectedDev.name===d.name?' selected':'';
+    return `<tr class="data-row${sel}" onclick="showDetail(DATA.find(x=>x.name==='${d.name.replace(/'/g,"\\'")}'))" data-idx="${i}">
+      <td class="rank-cell">${i+1}</td>
+      <td class="dev-name">${d.name}</td>
+      <td><div class="score-cell"><span class="score-val" style="color:${scoreColor(s)}">${s.toFixed(1)}</span><div class="score-bar"><div class="score-bar-fill" style="width:${s}%;background:${scoreColor(s)}"></div></div></div></td>
+      <td class="mw-cell">${fmt(d.total_capacity_mw,0)}</td>
+      <td>${d.total_projects}</td>
+      <td class="${rateClass(d.completion_rate)}">${pct(d.completion_rate)}</td>
+      <td class="${wr!=null?(wr>0.5?'rate-bad':wr>0.3?'rate-mid':'rate-good'):''}">${wr!=null?pct(wr):'—'}</td>
+      <td>${timeline}</td>
+      <td class="regions-cell">${regions}</td>
+      <td class="fuels-cell">${fuels}</td>
+    </tr>`;
+  }).join('');
+}
+
+function showDetail(d){
+  selectedDev=d;
+  location.hash='developer='+encodeURIComponent(d.name);
+  const panel=$('detailPanel');
+  panel.classList.add('open');
+  const s=d.score||0;
+  const wr=d.total_projects>0?d.withdrawn/d.total_projects:0;
+  const firstYear=d.first_project_date?d.first_project_date.split('-')[0]:'—';
+  const timeline=d.avg_timeline_days!=null?(d.avg_timeline_days/30).toFixed(1):'—';
+  const primaryRegion=(d.regions||'').split(', ')[0];
+  const regionBm=REGION_BM[primaryRegion]||{};
+
+  // Benchmarks
+  function bmCompare(val,avg,higher_is_better=true,isPct=false){
+    if(val==null||avg==null)return{cls:'bm-neutral',txt:'—'};
+    const diff=val-avg;
+    const better=higher_is_better?diff>0:diff<0;
+    const cls=Math.abs(diff)<0.01?'bm-neutral':better?'bm-better':'bm-worse';
+    const sign=diff>0?'+':'';
+    const txt=isPct?sign+(diff*100).toFixed(1)+'%':sign+diff.toFixed(1);
+    return{cls,txt};
+  }
+
+  const scoreBm=bmCompare(s,MARKET.avg_score);
+  const compBm=bmCompare(d.completion_rate,MARKET.avg_completion,true,true);
+  const regionScoreBm=bmCompare(s,regionBm.avg_score);
+
+  let projects=(PROJECTS[d.name]||[]).slice(0,20);
+
+  const html=`
+    <div class="detail-header">
+      <div>
+        <div class="dev-title">${d.name}</div>
+        <div class="dev-since">Active since ${firstYear}${d.parent_company?' · '+d.parent_company:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="score-badge" style="color:${scoreColor(s)};border-color:${scoreColor(s)}">${s.toFixed(1)}</div>
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Key Metrics</h3>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val">${fmt(d.total_capacity_mw,0)}</div><div class="stat-label">Total MW</div></div>
+        <div class="stat-card"><div class="stat-val">${d.total_projects}</div><div class="stat-label">Projects</div></div>
+        <div class="stat-card"><div class="stat-val ${rateClass(d.completion_rate)}">${pct(d.completion_rate)}</div><div class="stat-label">Completion Rate</div></div>
+        <div class="stat-card"><div class="stat-val ${wr>0.5?'rate-bad':wr>0.3?'rate-mid':'rate-good'}">${pct(wr)}</div><div class="stat-label">Withdrawal Rate</div></div>
+        <div class="stat-card"><div class="stat-val">${timeline}</div><div class="stat-label">Avg Timeline (mo)</div></div>
+        <div class="stat-card"><div class="stat-val">${d.active||0}</div><div class="stat-label">Active Pipeline</div></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Score Breakdown</h3>
+      <div class="chart-container"><canvas id="radarChart"></canvas></div>
+    </div>
+    <div class="detail-section">
+      <h3>Benchmarks</h3>
+      <div class="benchmark-row"><span class="bm-label">Score vs Market Avg (${MARKET.avg_score})</span><span class="bm-val ${scoreBm.cls}">${scoreBm.txt}</span></div>
+      <div class="benchmark-row"><span class="bm-label">Completion vs Market Avg (${pct(MARKET.avg_completion)})</span><span class="bm-val ${compBm.cls}">${compBm.txt}</span></div>
+      <div class="benchmark-row"><span class="bm-label">Score vs ${primaryRegion||'Region'} Avg (${regionBm.avg_score||'—'})</span><span class="bm-val ${regionScoreBm.cls}">${regionScoreBm.txt}</span></div>
+    </div>
+    <div class="detail-section">
+      <h3>Status Breakdown</h3>
+      <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr 1fr 1fr">
+        <div class="stat-card"><div class="stat-val" style="color:var(--green)">${d.operational||0}</div><div class="stat-label">Operational</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${d.active||0}</div><div class="stat-label">Active</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">${d.under_construction||0}</div><div class="stat-label">Under Const.</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--red)">${d.withdrawn||0}</div><div class="stat-label">Withdrawn</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${d.suspended||0}</div><div class="stat-label">Suspended</div></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Technology Mix</h3>
+      <div class="chart-container-sm"><canvas id="techChart"></canvas></div>
+    </div>
+    <div class="detail-section">
+      <h3>Regional Distribution</h3>
+      <div class="chart-container-sm"><canvas id="regionChart"></canvas></div>
+    </div>
+    <div class="detail-section">
+      <h3>Recent Projects</h3>
+      ${projects.length?`<div style="overflow-x:auto"><table class="projects-table">
+        <thead><tr><th>Name</th><th>Region</th><th>Type</th><th>MW</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody>${projects.map(p=>`<tr>
+          <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${p.name||'—'}</td>
+          <td>${p.region||''}</td>
+          <td>${p.type||''}</td>
+          <td class="mw-cell">${fmt(p.capacity_mw,1)}</td>
+          <td><span class="status-dot status-${(p.status||'').toLowerCase().replace(/ /g,'_')}"></span>${p.status||''}</td>
+          <td>${p.queue_date||''}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`:'<div style="color:var(--muted);font-size:13px">No project data available</div>'}
+    </div>
+  `;
+  $('detailContent').innerHTML=html;
+
+  // Destroy old charts
+  Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){}});
+  charts={};
+
+  const isDark=document.documentElement.dataset.theme==='dark';
+  const gridColor=isDark?'rgba(255,255,255,.08)':'rgba(0,0,0,.08)';
+  const textColor=isDark?'#a1a1aa':'#737373';
+  Chart.defaults.color=textColor;
+
+  // Radar chart
+  const dims=['completion_rate_score','timeline_score','volume_score','breadth_score','diversity_score','pipeline_score','depth_score'];
+  const dimLabels=['Completion','Timeline','Volume','Breadth','Diversity','Pipeline','Depth'];
+  const dimVals=dims.map(k=>d[k]||0);
+  const maxDim=Math.max(...dimVals,1);
+
+  charts.radar=new Chart($('radarChart'),{
+    type:'radar',
+    data:{labels:dimLabels,datasets:[{data:dimVals,backgroundColor:'rgba(59,130,246,.15)',borderColor:'rgba(59,130,246,.8)',pointBackgroundColor:'rgba(59,130,246,.8)',pointRadius:3,borderWidth:1.5}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{r:{beginAtZero:true,max:Math.ceil(maxDim/5)*5||10,grid:{color:gridColor},angleLines:{color:gridColor},pointLabels:{font:{size:11}},ticks:{display:false}}}}
+  });
+
+  // Tech donut
+  const techProjects=PROJECTS[d.name]||[];
+  const techCounts={};
+  techProjects.forEach(p=>{techCounts[p.type||'Other']=(techCounts[p.type||'Other']||0)+1});
+  const techLabels=Object.keys(techCounts);
+  const techVals=Object.values(techCounts);
+  const palette=['#3b82f6','#22c55e','#eab308','#ef4444','#f97316','#8b5cf6','#06b6d4','#ec4899','#84cc16','#14b8a6'];
+
+  charts.tech=new Chart($('techChart'),{
+    type:'doughnut',
+    data:{labels:techLabels,datasets:[{data:techVals,backgroundColor:palette.slice(0,techLabels.length),borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:6,font:{size:11}}}}}
+  });
+
+  // Region bar
+  const regionCounts={};
+  techProjects.forEach(p=>{regionCounts[p.region||'Other']=(regionCounts[p.region||'Other']||0)+1});
+  const regionLabels=Object.keys(regionCounts).sort((a,b)=>regionCounts[b]-regionCounts[a]);
+  const regionVals=regionLabels.map(r=>regionCounts[r]);
+
+  charts.region=new Chart($('regionChart'),{
+    type:'bar',
+    data:{labels:regionLabels,datasets:[{data:regionVals,backgroundColor:'rgba(59,130,246,.6)',borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:gridColor},ticks:{font:{size:11}}},y:{grid:{display:false},ticks:{font:{size:11}}}}}
+  });
+
+  // Re-render table to update selected row
+  render();
+}
+
+function closeDetail(){
+  selectedDev=null;
+  $('detailPanel').classList.remove('open');
+  location.hash='';
+  render();
+}
+
+// Keyboard nav
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeDetail();
+  if(!filtered.length)return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    const rows=document.querySelectorAll('.data-row');
+    let idx=-1;
+    if(selectedDev)idx=filtered.findIndex(d=>d.name===selectedDev.name);
+    if(e.key==='ArrowDown')idx=Math.min(idx+1,filtered.length-1);
+    else idx=Math.max(idx-1,0);
+    showDetail(filtered[idx]);
+    rows[idx]?.scrollIntoView({block:'nearest'});
+  }
+});
+
+// Export
+function exportCSV(){
+  const headers=['Rank','Developer','Score','Total MW','Projects','Completion Rate','Withdrawal Rate','Avg Timeline (days)','Regions','Fuel Types'];
+  const rows=filtered.map((d,i)=>[
+    i+1,'"'+d.name+'"',d.score||'',d.total_capacity_mw||'',d.total_projects,
+    d.completion_rate!=null?(d.completion_rate*100).toFixed(1)+'%':'',
+    d.total_projects>0?((d.withdrawn/d.total_projects)*100).toFixed(1)+'%':'',
+    d.avg_timeline_days||'','"'+(d.regions||'')+'"','"'+(d.fuel_types||'')+'"'
+  ]);
+  const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='developer_reliability_scores.csv';a.click();
+}
+</script>
+</body>
+</html>
