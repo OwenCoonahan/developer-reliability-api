@@ -1,3 +1,4 @@
+from typing import Optional, Tuple, List
 import duckdb
 from contextlib import contextmanager
 from app.config import get_settings
@@ -22,14 +23,14 @@ def cursor():
 
 
 def query_developers(
-    search: str | None = None,
-    region: str | None = None,
-    fuel_type: str | None = None,
+    search: Optional[str] = None,
+    region: Optional[str] = None,
+    fuel_type: Optional[str] = None,
     min_projects: int = 1,
     sort_by: str = "score",
     page: int = 1,
     per_page: int = 25,
-) -> tuple[list[dict], int]:
+) -> Tuple[List[dict], int]:
     con = get_connection()
     where = ["d.total_projects >= ?"]
     params: list = [min_projects]
@@ -86,7 +87,7 @@ def query_developers(
     return results, total
 
 
-def get_developer(name: str) -> dict | None:
+def get_developer(name: str) -> Optional[dict]:
     con = get_connection()
     row = con.execute(
         "SELECT * FROM developers WHERE name ILIKE ? OR name ILIKE ?",
@@ -100,7 +101,7 @@ def get_developer(name: str) -> dict | None:
 
 def get_developer_projects(
     name: str, page: int = 1, per_page: int = 50
-) -> tuple[list[dict], int]:
+) -> Tuple[List[dict], int]:
     con = get_connection()
     total = con.execute(
         "SELECT COUNT(*) FROM projects WHERE developer_canonical ILIKE ?", [name]
@@ -138,7 +139,7 @@ def get_developer_projects(
 
 def get_rankings(
     sort_by: str = "score", page: int = 1, per_page: int = 25
-) -> tuple[list[dict], int]:
+) -> Tuple[List[dict], int]:
     con = get_connection()
     total = con.execute(
         "SELECT COUNT(*) FROM developers WHERE score IS NOT NULL"

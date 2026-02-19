@@ -64,9 +64,9 @@ def developer_to_detail(d: dict) -> DeveloperDetail:
 
 @router.get("/developers", response_model=DeveloperListResponse)
 async def list_developers(
-    search: str | None = None,
-    region: str | None = None,
-    fuel_type: str | None = None,
+    search: Optional[str] = None,
+    region: Optional[str] = None,
+    fuel_type: Optional[str] = None,
     min_projects: int = Query(1, ge=1),
     sort_by: str = "score",
     page: int = Query(1, ge=1),
